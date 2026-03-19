@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0c0c0c"/>
+  <title>MatvrenDB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0c0c0c;
+      --fg:     #e4e4e4;
+      --dim:    #444;
+      --line:   #1f1f1f;
+      --accent: #a855f7;
+      --red:    #f87171;
+    }
+
+    html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+
+    body {
+      min-height: 100dvh;
+      background: var(--bg); color: var(--fg);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px; line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── zip count — fixed top left ── */
+    #zipcount {
+      position: fixed; top: 1.1rem; left: 1.25rem;
+      font-size: 10px; color: var(--dim);
+      letter-spacing: .05em; z-index: 100;
+      opacity: 0; transition: opacity .4s;
+    }
+    #zipcount.ready { opacity: 1; }
+    #zipcount em { color: var(--accent); font-style: normal; }
+
+    /* ── layout ── */
+    .page {
+      min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 15vh 1.25rem 6rem;
+    }
+
+    /* ── wordmark ── */
+    .wordmark {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .25em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 4rem;
+      opacity: 0; animation: up .5s ease forwards;
+    }
+    .wordmark em { color: var(--accent); font-style: normal; }
+
+    /* ── search ── */
+    .search-wrap {
+      width: 100%; max-width: 480px;
+      position: relative; z-index: 50;
+      opacity: 0; animation: up .5s .08s ease forwards;
+    }
+
+    .search-bar {
+      display: flex; align-items: center;
+      border-bottom: 1px solid var(--line);
+      transition: border-color .2s;
+      position: relative; z-index: 2;
+    }
+    .search-bar:focus-within,
+    .search-bar.open { border-color: var(--accent); }
+
+    #q {
+      flex: 1; background: none; border: none; outline: none;
+      padding: .85rem 0;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: max(13px, 16px);
+      color: var(--fg); caret-color: var(--accent);
+    }
+    #q::placeholder { color: var(--dim); }
+    #q::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      background: var(--dim); cursor: pointer; opacity: .5;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='18' y1='6' x2='6' y2='18' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='6' y1='6' x2='18' y2='18' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='18' y1='6' x2='6' y2='18' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='6' y1='6' x2='18' y2='18' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+    }
+    #q::-webkit-search-cancel-button:hover { opacity: .9; }
+
+    #go {
+      background: none; border: none; outline: none;
+      color: var(--dim); cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: .15em; text-transform: uppercase;
+      padding: .85rem 0 .85rem .75rem;
+      transition: color .15s;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #go:hover { color: var(--accent); }
+    #go:active { opacity: .6; }
+    #go:disabled { opacity: .25; pointer-events: none; }
+
+    /* ── dropdown ── */
+    #dd {
+      display: none;
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 999;
+      background: var(--bg);
+      border: 1px solid var(--line); border-top: none;
+      max-height: 52vh; overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    #dd.show { display: block; }
+    #dd::-webkit-scrollbar { display: none; }
+
+    .di {
+      display: flex; align-items: center;
+      padding: .65rem .75rem;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .di:last-child { border-bottom: none; }
+    .di:active { background: rgba(168,85,247,.07); }
+    @media (hover: hover) { .di:hover { background: rgba(168,85,247,.05); } }
+
+    .di-name {
+      flex: 1; font-size: 12px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .di-id { font-size: 10px; color: var(--dim); margin-left: .75rem; flex-shrink: 0; }
+
+    .dd-msg { padding: .9rem .75rem; color: var(--dim); font-size: 11px; }
+
+    /* ── hint ── */
+    .sub {
+      margin-top: .6rem; font-size: 10px;
+      color: var(--dim); letter-spacing: .05em; min-height: 1rem;
+    }
+    .sub.err { color: var(--red); }
+
+    /* ── result ── */
+    #out { width: 100%; max-width: 480px; margin-top: 3.5rem; }
+
+    .game { opacity: 0; animation: up .3s ease forwards; }
+
+    .game-img {
+      width: 100%; display: block;
+      aspect-ratio: 460 / 215; object-fit: cover;
+    }
+
+    .game-body { padding: 1rem 0 0; }
+
+    .game-meta {
+      display: flex; align-items: center; gap: .6rem;
+      margin-bottom: .9rem;
+    }
+
+    .game-id {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: .15em; text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    .dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0;
+      animation: blink 1s ease infinite;
+    }
+
+    .dl-link {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .7rem 0;
+      border-top: 1px solid var(--line);
+      color: var(--fg); text-decoration: none; font-size: 12px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: color .15s;
+    }
+    .dl-link:active { color: var(--accent); }
+    @media (hover: hover) {
+      .dl-link:hover { color: var(--accent); }
+      .dl-link:hover .dl-arrow { color: var(--accent); transform: translateX(3px); }
+    }
+
+    .dl-arrow {
+      font-size: 14px; color: var(--dim);
+      transition: color .15s, transform .15s;
+    }
+
+    .na {
+      padding: .7rem 0;
+      border-top: 1px solid var(--line);
+      font-size: 11px; color: var(--red); letter-spacing: .05em;
+    }
+
+    @keyframes up    { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+  </style>
+</head>
+<body>
+
+<div id="zipcount"></div>
+
+<div class="page">
+  <div class="wordmark">Matvren<em>DB</em></div>
+
+  <div class="search-wrap">
+    <div class="search-bar" id="bar">
+      <input id="q" type="search" inputmode="text" maxlength="80"
+        placeholder="game name or app id"
+        autocomplete="off" autocorrect="off" autocapitalize="off"
+        spellcheck="false" enterkeyhint="search"/>
+      <button id="go">run</button>
+    </div>
+    <div id="dd" role="listbox"></div>
+    <div class="sub" id="sub"></div>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<script>
+  const q        = document.getElementById('q');
+  const go       = document.getElementById('go');
+  const sub      = document.getElementById('sub');
+  const out      = document.getElementById('out');
+  const dd       = document.getElementById('dd');
+  const bar      = document.getElementById('bar');
+  const zipcountEl = document.getElementById('zipcount');
+
+  let timer = null, idx = -1, list = [];
+  let lastBlobUrl = null;
+
+  // ── zip count — Git Trees API gets ALL files, no 1000 cap ────────────────
+  async function loadZipCount() {
+    try {
+      const r = await fetch(
+        'https://api.github.com/repos/numbell98/limpdatabase/git/trees/main?recursive=1',
+        { headers: { Accept: 'application/vnd.github.v3+json' }, signal: AbortSignal.timeout(12000) }
+      );
+      if (!r.ok) return;
+      const data = await r.json();
+      const n = (data.tree || []).filter(f => f.path.endsWith('.zip')).length;
+      zipcountEl.innerHTML = `<em>${n}</em> zips`;
+      zipcountEl.classList.add('ready');
+    } catch { /* silent */ }
+  }
+
+  loadZipCount();
+  setInterval(loadZipCount, 60000); // refresh every minute
+
+  // ── input ─────────────────────────────────────────────────────────────────
+  q.addEventListener('input', () => {
+    const v = q.value.trim();
+    setSub('');
+    clearTimeout(timer);
+    if (!v || /^\d+$/.test(v)) { closeDD(); return; }
+    timer = setTimeout(() => search(v), 150);
+  });
+
+  q.addEventListener('keydown', e => {
+    if (!dd.classList.contains('show')) { if (e.key === 'Enter') run(); return; }
+    if      (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); move(-1); }
+    else if (e.key === 'Enter')     { e.preventDefault(); pickIdx(); }
+    else if (e.key === 'Escape')    { closeDD(); }
+  });
+
+  go.addEventListener('click', run);
+  go.addEventListener('touchend', e => { e.preventDefault(); run(); });
+
+  document.addEventListener('mousedown',  e => { if (!e.target.closest('.search-wrap')) closeDD(); });
+  document.addEventListener('touchstart', e => { if (!e.target.closest('.search-wrap')) closeDD(); }, { passive: true });
+
+  function setSub(msg, err = false) {
+    sub.textContent = msg;
+    sub.className = 'sub' + (err ? ' err' : '');
+  }
+
+  // ── steam search ──────────────────────────────────────────────────────────
+  async function search(term) {
+    dd.innerHTML = '<div class="dd-msg">searching…</div>';
+    openDD();
+
+    const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&cc=us&l=en&count=20`;
+
+    const tryProxy = async (proxy) => {
+      const r = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
+      if (!r.ok) throw new Error('bad');
+      let d = await r.json();
+      if (d.contents) d = JSON.parse(d.contents);
+      const games = (d.items || []).slice(0, 15).map(x => ({ appid: String(x.id), name: x.name }));
+      if (!games.length) throw new Error('empty');
+      return games;
+    };
+
+    try {
+      const games = await Promise.any([
+        tryProxy(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`),
+        tryProxy(`https://corsproxy.io/?url=${encodeURIComponent(url)}`),
+        tryProxy(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`),
+      ]);
+      if (dd.classList.contains('show')) renderDD(games);
+    } catch {
+      if (dd.classList.contains('show'))
+        dd.innerHTML = '<div class="dd-msg">no results — try app id directly</div>';
+    }
+  }
+
+  function renderDD(games) {
+    list = games; idx = -1;
+    const f = document.createDocumentFragment();
+    games.forEach(g => {
+      const el = document.createElement('div');
+      el.className = 'di';
+      el.setAttribute('role', 'option');
+      el.innerHTML = `<div class="di-name">${esc(g.name)}</div><div class="di-id">${g.appid}</div>`;
+      el.addEventListener('mousedown',  e => { e.preventDefault(); pick(g); });
+      el.addEventListener('touchstart', e => { e.preventDefault(); pick(g); }, { passive: false });
+      f.appendChild(el);
+    });
+    dd.innerHTML = ''; dd.appendChild(f); openDD();
+  }
+
+  function openDD()  { dd.classList.add('show'); bar.classList.add('open'); }
+  function closeDD() { dd.classList.remove('show'); bar.classList.remove('open'); idx = -1; }
+
+  function move(dir) {
+    const els = dd.querySelectorAll('.di');
+    if (!els.length) return;
+    els[idx]?.classList.remove('active');
+    idx = (idx + dir + els.length) % els.length;
+    els[idx].classList.add('active');
+    els[idx].scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }
+
+  function pickIdx() { if (idx >= 0 && list[idx]) pick(list[idx]); }
+
+  function pick(g) {
+    clearTimeout(timer); timer = null;
+    q.value = g.appid;
+    q.blur(); closeDD();
+    load(g.appid, g.name);
+  }
+
+  // ── load ──────────────────────────────────────────────────────────────────
+  function run() {
+    const v = q.value.trim();
+    if (!v) { setSub('enter a game name or app id', true); return; }
+    if (!/^\d+$/.test(v)) { setSub('select from the list', true); return; }
+    q.blur(); load(v, null);
+  }
+
+  async function load(appid, name) {
+    closeDD(); setSub('');
+    const zip = `https://raw.githubusercontent.com/numbell98/limpdatabase/main/Zips/${appid}.zip`;
+    const api = `https://api.github.com/repos/numbell98/limpdatabase/contents/Zips/${appid}.zip`;
+    const img = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`;
+
+    renderGame(appid, name || appid, img, zip);
+    if (!name) fetchName(appid);
+
+    // Availability check
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 8000);
+      const r = await fetch(api, { signal: c.signal, headers: { Accept: 'application/vnd.github.v3+json' } });
+      clearTimeout(t);
+
+      const dot = out.querySelector('.dot');
+      const slot = document.getElementById('dl-slot');
+      if (r.status === 404) {
+        if (slot) { const na = document.createElement('div'); na.className = 'na'; na.textContent = 'not available yet'; slot.replaceWith(na); }
+        dot?.remove();
+      } else {
+        if (slot) { slot.outerHTML = `<a class="dl-link" id="dl-${appid}" href="${zip}" target="_blank" rel="noopener noreferrer"><span>${appid}.zip</span><span class="dl-arrow">→</span></a>`; fetchBlob(appid, zip); }
+        if (dot) { dot.style.transition = 'opacity 1.8s ease'; dot.style.opacity = '0'; setTimeout(() => dot.remove(), 1800); }
+      }
+    } catch {
+      // check timed out — show download anyway as fallback
+      const dot = out.querySelector('.dot');
+      const slot = document.getElementById('dl-slot');
+      if (slot) { slot.outerHTML = `<a class="dl-link" id="dl-${appid}" href="${zip}" target="_blank" rel="noopener noreferrer"><span>${appid}.zip</span><span class="dl-arrow">→</span></a>`; fetchBlob(appid, zip); }
+      if (dot) { dot.style.transition = 'opacity 1.8s ease'; dot.style.opacity = '0'; setTimeout(() => dot.remove(), 1800); }
+    }
+  }
+
+  async function fetchName(appid) {
+    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic`;
+    try {
+      const d = await Promise.any([
+        proxyJson(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`),
+        proxyJson(`https://corsproxy.io/?url=${encodeURIComponent(url)}`),
+      ]);
+      const name = d?.[appid]?.data?.name;
+      if (name) { const el = out.querySelector('.game-id'); if (el) el.textContent = name; }
+    } catch { /* leave as appid */ }
+  }
+
+  async function proxyJson(proxy) {
+    const r = await fetch(proxy, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw 0;
+    let d = await r.json();
+    if (d.contents) d = JSON.parse(d.contents);
+    return d;
+  }
+
+  async function fetchBlob(appid, rawUrl) {
+    try {
+      let res;
+      try {
+        res = await fetch(rawUrl, { signal: AbortSignal.timeout(30000) });
+        if (!res.ok) throw 0;
+      } catch {
+        res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(rawUrl)}`, { signal: AbortSignal.timeout(30000) });
+        if (!res.ok) throw 0;
+      }
+      const blob = new Blob([await res.arrayBuffer()], { type: 'application/zip' });
+      if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+      lastBlobUrl = URL.createObjectURL(blob);
+      const el = document.getElementById(`dl-${appid}`);
+      if (el) { el.href = lastBlobUrl; el.download = `${appid}.zip`; el.removeAttribute('target'); }
+    } catch { /* silent */ }
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────────
+  function renderGame(appid, name, img, zip) {
+    out.innerHTML = `
+      <div class="game">
+        <img class="game-img" src="${img}" alt="" onerror="this.remove()" loading="eager" decoding="async"/>
+        <div class="game-body">
+          <div class="game-meta">
+            <span class="game-id">${esc(name)}</span>
+            <span class="dot"></span>
+          </div>
+          <div id="dl-slot"></div>
+        </div>
+      </div>`;
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
